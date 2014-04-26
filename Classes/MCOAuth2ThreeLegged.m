@@ -10,17 +10,11 @@
 
 @interface MCOAuth2ThreeLegged ()
 
+
 @property (strong, nonatomic, readwrite) NSURL *authorizeURL;
-@property (copy, nonatomic) NSString *exchangePath;
 
-@property (copy, nonatomic) NSString *clientId;
-@property (copy, nonatomic) NSString *clientSecret;
-@property (copy, nonatomic) NSString *redirect;
+/** The state is sent to the server when requesting a token code, we internally generate a UUID. */
 @property (copy, nonatomic) NSString *state;
-
-@property (copy, nonatomic) NSString *code;
-@property (copy, nonatomic) NSString *accessToken;
-@property (copy, nonatomic) NSString *refreshToken;
 
 @end
 
@@ -28,36 +22,39 @@
 @implementation MCOAuth2ThreeLegged
 
 
-- (id)initWithBaseURL:(NSURL *)base authorize:(NSString *)authorize exchange:(NSString *)exchange clientId:(NSString *)clientId secret:(NSString *)secret redirect:(NSString *)redirect scope:(NSString *)scope
+- (id)initWithBaseURL:(NSURL *)base
+			authorize:(NSString *)authorize
+				token:(NSString *)token
+			 clientId:(NSString *)clientId
+			   secret:(NSString *)secret
+			 redirect:(NSString *)redirect
+				scope:(NSString *)scope
 {
-	NSParameterAssert(authorize);
-	NSParameterAssert(exchange);
-	NSParameterAssert(clientId);
-	NSParameterAssert(secret);
-	NSParameterAssert(redirect);
-	
 	if ((self = [super initWithBaseURL:base])) {
-		self.exchangePath = exchange;
+		self.authorizePath = authorize;
+		self.tokenPath = token;
 		
 		self.clientId = clientId;
 		self.clientSecret = secret;
 		self.redirect = redirect;
 		self.state = [[self class] newUUID];
 		
-		NSDictionary *params = @{
-			@"client_id": clientId,
-			@"response_type": @"code",
-			@"redirect_uri": redirect,
-			@"scope": scope ?: @"basic",
-			@"state": _state
-		};
-		
-		NSURLComponents *comp = [NSURLComponents componentsWithURL:self.baseURL resolvingAgainstBaseURL:YES];
-		NSAssert([comp.scheme isEqualToString:@"https"], @"You MUST use HTTPS!");
-		comp.path = authorize;
-		comp.query = [[self class] queryStringFor:params];
-		
-		self.authorizeURL = comp.URL;
+		if (self.baseURL && _authorizePath && _clientId && _redirect) {
+			NSDictionary *params = @{
+				@"client_id": _clientId,
+				@"response_type": @"code",
+				@"redirect_uri": _redirect,
+				@"scope": scope ?: @"basic",
+				@"state": _state
+			};
+			
+			NSURLComponents *comp = [NSURLComponents componentsWithURL:self.baseURL resolvingAgainstBaseURL:YES];
+			NSAssert([comp.scheme isEqualToString:@"https"], @"You MUST use HTTPS!");
+			comp.path = authorize;
+			comp.query = [[self class] queryStringFor:params];
+			
+			self.authorizeURL = comp.URL;
+		}
 	}
 	return self;
 }
@@ -175,7 +172,7 @@
 	
 	NSURLComponents *comp = [NSURLComponents componentsWithURL:self.baseURL resolvingAgainstBaseURL:YES];
 	NSAssert([comp.scheme isEqualToString:@"https"], @"You MUST use HTTPS!");
-	comp.path = _exchangePath;
+	comp.path = _tokenPath;
 	
 	NSMutableURLRequest *post = [[NSMutableURLRequest alloc] initWithURL:comp.URL];
 	[post setHTTPMethod:@"POST"];

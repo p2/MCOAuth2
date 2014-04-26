@@ -13,13 +13,42 @@
  */
 @interface MCOAuth2ThreeLegged : MCOAuth2
 
-/** The URL that should be used to authorize against. */
+/** The client id. */
+@property (copy, nonatomic) NSString *clientId;
+
+/** The client secret. */
+@property (copy, nonatomic) NSString *clientSecret;
+
+/** The redirect URL registered with the service provider. */
+@property (copy, nonatomic) NSString *redirect;
+
+
+/**
+ *  The URL that should be used to authorize against, will be created from `authorizePath` and parameters passed during initialization IF AND ONLY IF those
+ *  parameters are provided.
+ */
 @property (strong, nonatomic, readonly) NSURL *authorizeURL;
+
+/** The URL path, relative to the base URL, to be used to request a token code. */
+@property (copy, nonatomic) NSString *authorizePath;
+
+/** The URL path, relative to the base URL, to be used to exchange a token code for an access token. */
+@property (copy, nonatomic) NSString *tokenPath;
+
+/** The code that can be traded for an access token. */
+@property (copy, nonatomic) NSString *code;
+
+/** The receiver's access token. */
+@property (copy, nonatomic) NSString *accessToken;
+
+/** A long-lived refresh token. */
+@property (copy, nonatomic) NSString *refreshToken;
+
 
 /** Designated initializer. */
 - (id)initWithBaseURL:(NSURL *)base
 			authorize:(NSString *)authorize
-			 exchange:(NSString *)exchange
+				token:(NSString *)token
 			 clientId:(NSString *)clientId
 			   secret:(NSString *)secret
 			 redirect:(NSString *)redirect
