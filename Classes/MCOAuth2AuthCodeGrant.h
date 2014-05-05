@@ -79,6 +79,18 @@
  */
 - (void)exchangeTokenWithRedirectURL:(NSURL *)url callback:(void (^)(BOOL didCancel, NSError *error))callback;
 
+/**
+ *  If the code is received via other means than embedded in the redirect URL (e.g. for Google's services when using the "urn:ietf:wg:oauth:2.0:oob" redirect
+ *  URL) you can use this method to receive the access token.
+ *
+ *  @note This method does not do state verification.
+ 
+ *  @param code The code to exchange for an access token
+ *  @param callback A callback that will have `didCancel` = NO and `error` = nil on success
+ */
+- (void)exchangeCodeForToken:(NSString *)code callback:(void (^)(BOOL, NSError *))callback;
+
+
 #pragma mark Resource Requests
 
 /**

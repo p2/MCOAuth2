@@ -78,9 +78,10 @@
 	
 	// compose the URL
 	NSURLComponents *comp = [NSURLComponents componentsWithURL:self.apiURL resolvingAgainstBaseURL:YES];
-	comp.path = restPath;
+	comp.path = [comp.path ?: @"" stringByAppendingPathComponent:restPath];
 	
 	NSMutableURLRequest *get = [[NSMutableURLRequest alloc] initWithURL:comp.URL];
+	[get setValue:@"application/json" forHTTPHeaderField:@"Accept"];
 	[get setValue:[NSString stringWithFormat:@"Bearer %@", _accessToken] forHTTPHeaderField:@"Authorization"];
 	
 	// send the GET request
@@ -90,14 +91,12 @@
 			NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
 			if ([http isKindOfClass:[NSHTTPURLResponse class]] && 200 == http.statusCode) {
 				
-				// success, store token
+				// success, deserialize JSON and call the callback
 				NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
-				if (json) {
-					if (callback) {
-						callback(json, nil);
-					}
-					return;
+				if (callback) {
+					callback(json, error);
 				}
+				return;
 			}
 		}
 		
@@ -153,6 +152,13 @@
 		}
 		return;
 	}
+	
+	[self exchangeCodeForToken:_code callback:callback];
+}
+
+- (void)exchangeCodeForToken:(NSString *)code callback:(void (^)(BOOL, NSError *))callback
+{
+	self.code = code;
 	
 	// do we have a code?
 	if (!_code) {
