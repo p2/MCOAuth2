@@ -9,9 +9,11 @@
 
 
 /**
- *  A class to handle three-legged OAuth2 authorization and resource fetching.
+ *  A class to handle authorization for confidential clients via the authorization code grant method.
+ *
+ *  This auth flow is designed for clients that are capable of protecting their client secret, which a distributed Mac/iOS App **is not**!
  */
-@interface MCOAuth2ThreeLegged : MCOAuth2
+@interface MCOAuth2AuthCodeGrant : MCOAuth2
 
 /** The client id. */
 @property (copy, nonatomic) NSString *clientId;
@@ -30,7 +32,7 @@
 @property (strong, nonatomic, readonly) NSURL *authorizeURL;
 
 /** The URL path, relative to the base URL, to be used to request a token code. */
-@property (copy, nonatomic) NSString *authorizePath;
+@property (copy, nonatomic, readonly) NSString *authorizePath;
 
 /** The URL path, relative to the base URL, to be used to exchange a token code for an access token. */
 @property (copy, nonatomic) NSString *tokenPath;
@@ -47,6 +49,8 @@
 
 /**
  *  Designated initializer.
+ *
+ *  If you need a different API URL you can set it after initialization.
  *
  *  @param base The service's base URL, will be used to append OAuth and resource paths. E.g. @"https://www.service.com"
  *  @param authorize The path to the authorize URL when appended to `base`; don't forget the leading "/". E.g.: @"/oauth/authorize"

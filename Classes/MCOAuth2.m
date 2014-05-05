@@ -10,13 +10,37 @@
 
 @implementation MCOAuth2
 
+
 - (id)initWithBaseURL:(NSURL *)base
+{
+	return [self initWithBaseURL:base apiURL:nil];
+}
+
+- (id)initWithBaseURL:(NSURL *)base apiURL:(NSURL *)api
 {
 	NSParameterAssert(base);
 	if ((self = [super init])) {
 		self.baseURL = base;
+		self.apiURL = api;
 	}
 	return self;
+}
+
+
+
+#pragma mark - URLs
+- (NSURL *)apiURL
+{
+	return _apiURL ?: _baseURL;
+}
+
+
+
+#pragma mark - OAuth Actions
+
+- (void)exchangeTokenWithRedirectURL:(NSURL *)url callback:(void (^)(BOOL didCancel, NSError *error))callback;
+{
+	@throw [NSException exceptionWithName:@"MCOAuth2AbstractClassUse" reason:@"Oh snap, should have used a subclass" userInfo:nil];
 }
 
 
@@ -35,7 +59,9 @@
 {
 	NSMutableArray *query = [NSMutableArray arrayWithCapacity:[params count]];
 	[params enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
-		[query addObject:[NSString stringWithFormat:@"%@=%@", key, obj]];		// NSURLComponents will correctly encode the parameter string
+		if ([NSNull null] != obj) {
+			[query addObject:[NSString stringWithFormat:@"%@=%@", key, obj]];		// NSURLComponents will correctly encode the parameter string
+		}
 	}];
 	
 	return [query componentsJoinedByString:@"&"];
@@ -54,6 +80,57 @@
 	}
 	
 	return params;
+}
+
+
++ (NSError *)errorForAccessTokenErrorResponse:(NSDictionary *)params
+{
+	NSString *message = nil;
+	
+	// "error_description" is optional, we prefer it if it's present
+	NSString *err_msg = params[@"error_description"];
+	if ([err_msg length] > 0) {
+		message = err_msg;
+	}
+	
+	// the "error" response is required for error responses
+	NSString *err_code = params[@"error"];
+	if ([err_code length] > 0 && 0 == [message length]) {
+		if ([err_code isEqualToString:@"invalid_request"]) {
+			message = @"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed.";
+		}
+		else if ([err_code isEqualToString:@"unauthorized_client"]) {
+			message = @"The client is not authorized to request an access token using this method.";
+		}
+		else if ([err_code isEqualToString:@"access_denied"]) {
+			message = @"The resource owner or authorization server denied the request.";
+		}
+		else if ([err_code isEqualToString:@"unsupported_response_type"]) {
+			message = @"The authorization server does not support obtaining an access token using this method.";
+		}
+		else if ([err_code isEqualToString:@"invalid_scope"]) {
+			message = @"The requested scope is invalid, unknown, or malformed.";
+		}
+		else if ([err_code isEqualToString:@"server_error"]) {
+			message = @"The authorization server encountered an unexpected condition that prevented it from fulfilling the request.";
+		}
+		else if ([err_code isEqualToString:@"temporarily_unavailable"]) {
+			message = @"The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server";
+		}
+		else {
+			message = [NSString stringWithFormat:@"Authorization error: %@", err_code];
+		}
+	}
+	
+	// unknown error
+	if (0 == [message length]) {
+		message = @"Unknown error";
+	}
+	
+	NSMutableDictionary *userInfo = params ? [params mutableCopy] : [NSMutableDictionary dictionaryWithCapacity:1];
+	userInfo[NSLocalizedDescriptionKey] = message;
+	
+	return [NSError errorWithDomain:@"MCOAuth2ErrorDomain" code:600 userInfo:userInfo];
 }
 
 

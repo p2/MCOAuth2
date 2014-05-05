@@ -5,13 +5,13 @@
 //  Created by Pascal Pfiffner on 4/22/14.
 //
 
-#import "MCOAuth2ThreeLegged.h"
+#import "MCOAuth2AuthCodeGrant.h"
 
 
-@interface MCOAuth2ThreeLegged ()
-
+@interface MCOAuth2AuthCodeGrant ()
 
 @property (strong, nonatomic, readwrite) NSURL *authorizeURL;
+@property (copy, nonatomic, readwrite) NSString *authorizePath;
 
 /** The state is sent to the server when requesting a token code, we internally generate a UUID. */
 @property (copy, nonatomic) NSString *state;
@@ -19,7 +19,7 @@
 @end
 
 
-@implementation MCOAuth2ThreeLegged
+@implementation MCOAuth2AuthCodeGrant
 
 
 - (id)initWithBaseURL:(NSURL *)base
@@ -30,7 +30,7 @@
 			 redirect:(NSString *)redirect
 				scope:(NSString *)scope
 {
-	if ((self = [super initWithBaseURL:base])) {
+	if ((self = [super initWithBaseURL:base apiURL:nil])) {
 		self.authorizePath = authorize;
 		self.tokenPath = token;
 		
@@ -44,13 +44,13 @@
 				@"client_id": _clientId,
 				@"response_type": @"code",
 				@"redirect_uri": _redirect,
-				@"scope": scope ?: @"basic",
+				@"scope": scope ?: [NSNull null],
 				@"state": _state
 			};
 			
 			NSURLComponents *comp = [NSURLComponents componentsWithURL:self.baseURL resolvingAgainstBaseURL:YES];
 			NSAssert([comp.scheme isEqualToString:@"https"], @"You MUST use HTTPS!");
-			comp.path = authorize;
+			comp.path = [comp.path ?: @"" stringByAppendingPathComponent:authorize];
 			comp.query = [[self class] queryStringFor:params];
 			
 			self.authorizeURL = comp.URL;
@@ -77,7 +77,7 @@
 	}
 	
 	// compose the URL
-	NSURLComponents *comp = [NSURLComponents componentsWithURL:self.baseURL resolvingAgainstBaseURL:YES];
+	NSURLComponents *comp = [NSURLComponents componentsWithURL:self.apiURL resolvingAgainstBaseURL:YES];
 	comp.path = restPath;
 	
 	NSMutableURLRequest *get = [[NSMutableURLRequest alloc] initWithURL:comp.URL];
@@ -138,60 +138,9 @@
 	
 	// error response
 	if (error != NULL) {
-		*error = [self errorForAccessTokenErrorResponse:query];
+		*error = [[self class] errorForAccessTokenErrorResponse:query];
 	}
 	return NO;
-}
-
-/**
- *  Handles access token error response.
- *  @param params The URL parameters passed into the redirect URL upon error
- */
-- (NSError *)errorForAccessTokenErrorResponse:(NSDictionary *)params
-{
-	NSString *message = nil;
-	
-	// "error_description" is optional, we prefer it if it's present
-	NSString *err_msg = params[@"error_description"];
-	if ([err_msg length] > 0) {
-		message = err_msg;
-	}
-	
-	// the "error" response is required for error responses
-	NSString *err_code = params[@"error"];
-	if ([err_code length] > 0 && 0 == [message length]) {
-		if ([err_code isEqualToString:@"invalid_request"]) {
-			message = @"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed.";
-		}
-		else if ([err_code isEqualToString:@"unauthorized_client"]) {
-			message = @"The client is not authorized to request an access token using this method.";
-		}
-		else if ([err_code isEqualToString:@"access_denied"]) {
-			message = @"The resource owner or authorization server denied the request.";
-		}
-		else if ([err_code isEqualToString:@"unsupported_response_type"]) {
-			message = @"The authorization server does not support obtaining an access token using this method.";
-		}
-		else if ([err_code isEqualToString:@"invalid_scope"]) {
-			message = @"The requested scope is invalid, unknown, or malformed.";
-		}
-		else if ([err_code isEqualToString:@"server_error"]) {
-			message = @"The authorization server encountered an unexpected condition that prevented it from fulfilling the request.";
-		}
-		else if ([err_code isEqualToString:@"temporarily_unavailable"]) {
-			message = @"The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server";
-		}
-	}
-	
-	// unknown error
-	if (0 == [message length]) {
-		message = @"Unknown error";
-	}
-	
-	NSMutableDictionary *userInfo = params ? [params mutableCopy] : [NSMutableDictionary dictionaryWithCapacity:1];
-	userInfo[NSLocalizedDescriptionKey] = message;
-	
-	return [NSError errorWithDomain:@"MCOAuth2ErrorDomain" code:600 userInfo:userInfo];
 }
 
 
@@ -226,7 +175,7 @@
 	
 	NSURLComponents *comp = [NSURLComponents componentsWithURL:self.baseURL resolvingAgainstBaseURL:YES];
 	NSAssert([comp.scheme isEqualToString:@"https"], @"You MUST use HTTPS!");
-	comp.path = _tokenPath;
+	comp.path = [comp.path ?: @"" stringByAppendingPathComponent:_tokenPath];
 	
 	NSMutableURLRequest *post = [[NSMutableURLRequest alloc] initWithURL:comp.URL];
 	[post setHTTPMethod:@"POST"];
