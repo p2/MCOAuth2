@@ -54,6 +54,7 @@
 			comp.query = [[self class] queryStringFor:params];
 			
 			self.authorizeURL = comp.URL;
+			NSAssert(_authorizeURL, @"Unable to create a valid URL from components. This usually happens when you supply paths without leading slash. Components: %@", comp);
 		}
 	}
 	return self;
@@ -117,7 +118,7 @@
 {
 	NSURLComponents *comp = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:YES];
 	if (!comp) {
-		MC_ERR(error, @"Invalid callback URI", 0)
+		MC_ERR(error, @"Invalid redirect URI", 0)
 		return NO;
 	}
 	
