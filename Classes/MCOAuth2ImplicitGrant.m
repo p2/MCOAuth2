@@ -31,7 +31,6 @@
 {
 	if ((self = [super initWithBaseURL:base apiURL:nil])) {
 		self.authorizePath = authorize;
-		
 		self.clientId = clientId;
 		self.redirect = redirect;
 		self.state = [[self class] newUUID];
@@ -63,8 +62,36 @@
 
 - (void)handleRedirectURL:(NSURL *)url callback:(void (^)(BOOL didCancel, NSError *error))callback
 {
-	// TODO: working here
-	NSLog(@"url: %@", url);
+	NSError *error = nil;
+	NSURLComponents *comp = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:YES];
+	if (comp.fragment) {
+		NSDictionary *params = [[self class] paramsFromQuery:comp.fragment];
+		NSString *token = params[@"access_token"];
+		if ([token length] > 0) {
+			NSAssert([@"bearer" isEqualToString:params[@"token_type"]], @"Only supporting \"bearer\" tokens for now");
+			
+			// got a token, use it if state checks out
+			if ([params[@"state"] isEqualToString:_state]) {
+				self.accessToken = token;
+			}
+			else {
+				NSString *errstr = [NSString stringWithFormat:@"Invalid state, will not use this token: %@", params[@"state"]];
+				MC_ERR(&error, errstr, 0)
+			}
+		}
+		else {
+			NSString *errstr = [NSString stringWithFormat:@"Did not receive a token in redirect URL: %@", url];
+			MC_ERR(&error, errstr, 0)
+		}
+	}
+	else {
+		NSString *errstr = [NSString stringWithFormat:@"Invalid redirect URL: %@", url];
+		MC_ERR(&error, errstr, 0)
+	}
+	
+	if (callback) {
+		callback(NO, error);
+	}
 }
 
 
