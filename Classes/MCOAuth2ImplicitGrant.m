@@ -68,7 +68,7 @@
 		NSDictionary *params = [[self class] paramsFromQuery:comp.fragment];
 		NSString *token = params[@"access_token"];
 		if ([token length] > 0) {
-			NSAssert([@"bearer" isEqualToString:params[@"token_type"]], @"Only supporting \"bearer\" tokens for now");
+			NSAssert([@"bearer" isEqualToString:[params[@"token_type"] lowercaseString]], @"Only supporting \"bearer\" tokens for now");
 			
 			// got a token, use it if state checks out
 			if ([params[@"state"] isEqualToString:_state]) {
