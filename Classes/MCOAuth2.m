@@ -45,6 +45,52 @@
 
 
 
+#pragma mark - Resource Requests
+
+- (void)requestJSONResource:(NSString *)restPath callback:(void (^)(id jsonObject, NSError *error))callback
+{
+	NSParameterAssert(restPath);
+	if (!self.accessToken) {
+		if (callback) {
+			NSError *error = nil;
+			MC_ERR(&error, @"I don't yet have an access token, cannot request data", 0)
+			callback(NO, error);
+		}
+		return;
+	}
+	
+	// compose the URL
+	NSURLComponents *comp = [NSURLComponents componentsWithURL:self.apiURL resolvingAgainstBaseURL:YES];
+	comp.path = [comp.path ?: @"" stringByAppendingPathComponent:restPath];
+	
+	NSMutableURLRequest *get = [[NSMutableURLRequest alloc] initWithURL:comp.URL];
+	[get setValue:@"application/json" forHTTPHeaderField:@"Accept"];
+	[get setValue:[NSString stringWithFormat:@"Bearer %@", self.accessToken] forHTTPHeaderField:@"Authorization"];
+	
+	// send the GET request
+	[NSURLConnection sendAsynchronousRequest:get queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse *response, NSData *data, NSError *connectionError) {
+		NSError *error = connectionError;
+		if (!error) {
+			NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
+			if ([http isKindOfClass:[NSHTTPURLResponse class]] && 200 == http.statusCode) {
+				
+				// success, deserialize JSON and call the callback
+				NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+				if (callback) {
+					callback(json, error);
+				}
+				return;
+			}
+		}
+		
+		if (callback) {
+			callback(nil, error ?: [NSError errorWithDomain:NSCocoaErrorDomain code:0 userInfo:@{NSLocalizedDescriptionKey: @"Unknown response error"}]);
+		}
+	}];
+}
+
+
+
 #pragma mark - Utilities
 + (NSString *)newUUID
 {

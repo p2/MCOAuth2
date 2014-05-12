@@ -40,9 +40,6 @@
 /** The code that can be traded for an access token. */
 @property (copy, nonatomic) NSString *code;
 
-/** The receiver's access token. */
-@property (copy, nonatomic) NSString *accessToken;
-
 /** A long-lived refresh token. */
 @property (copy, nonatomic) NSString *refreshToken;
 
@@ -89,19 +86,5 @@
  *  @param callback A callback that will have `didCancel` = NO and `error` = nil on success
  */
 - (void)exchangeCodeForToken:(NSString *)code callback:(void (^)(BOOL, NSError *))callback;
-
-
-#pragma mark Resource Requests
-
-/**
- *  Request a resource that returns JSON data.
- *
- *	If the returned data is nil and error is nil, the request has been aborted. Check for an error, if none occurred check for json data and handle the data,
- *  otherwise do nothing.
- *
- *  @param restPath The REST path, appended to the receiver's `baseURL`. Don't forget the leading "/", e.g. @"/api/v1/profile"
- *  @param callback A callback that will have `didCancel` = NO and `error` = nil on success
- */
-- (void)requestJSONResource:(NSString *)restPath callback:(void (^)(id jsonObject, NSError *error))callback;
 
 @end

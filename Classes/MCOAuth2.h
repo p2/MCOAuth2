@@ -19,11 +19,28 @@
 /** Optional base API URL, in case the authentication host is different from the API host (e.g. a subdomain). Defaults to `baseURL`. */
 @property (strong, nonatomic) NSURL *apiURL;
 
+/** The receiver's access token. */
+@property (copy, nonatomic) NSString *accessToken;
+
 /** Initializer, uses the designated initializer with a `nil` apiURL parameter. */
 - (id)initWithBaseURL:(NSURL *)base;
 
 /** Designated initializer. */
 - (id)initWithBaseURL:(NSURL *)base apiURL:(NSURL *)api;
+
+
+#pragma mark Resource Requests
+
+/**
+ *  Request a resource that returns JSON data.
+ *
+ *	If the returned data is nil and error is nil, the request has been aborted. Check for an error, if none occurred check for json data and handle the data,
+ *  otherwise do nothing.
+ *
+ *  @param restPath The REST path, appended to the receiver's `baseURL`. Don't forget the leading "/", e.g. @"/api/v1/profile"
+ *  @param callback A callback that will have `didCancel` = NO and `error` = nil on success
+ */
+- (void)requestJSONResource:(NSString *)restPath callback:(void (^)(id jsonObject, NSError *error))callback;
 
 
 #pragma mark Utilities

@@ -31,9 +31,6 @@
 /** The URL path, relative to the base URL, to be used to request a token. */
 @property (copy, nonatomic, readonly) NSString *authorizePath;
 
-/** The receiver's access token. */
-@property (copy, nonatomic) NSString *accessToken;
-
 
 /**
  *  Designated initializer.
