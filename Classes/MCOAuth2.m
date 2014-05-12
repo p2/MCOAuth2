@@ -72,14 +72,19 @@
 		NSError *error = connectionError;
 		if (!error) {
 			NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
-			if ([http isKindOfClass:[NSHTTPURLResponse class]] && 200 == http.statusCode) {
-				
-				// success, deserialize JSON and call the callback
-				NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
-				if (callback) {
-					callback(json, error);
+			if ([http isKindOfClass:[NSHTTPURLResponse class]]) {
+				if (200 == http.statusCode) {
+					
+					// success, deserialize JSON and call the callback
+					NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+					if (callback) {
+						callback(json, error);
+					}
+					return;
 				}
-				return;
+				
+				// HTTP error
+				MC_ERR(&error, [NSHTTPURLResponse localizedStringForStatusCode:http.statusCode], http.statusCode)
 			}
 		}
 		
