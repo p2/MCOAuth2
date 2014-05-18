@@ -1,5 +1,5 @@
 //
-//  MCOAuth2ThreeLegged.h
+//  MCOAuth2CodeGrant.h
 //  Ossus
 //
 //  Created by Pascal Pfiffner on 4/22/14.
@@ -30,6 +30,9 @@
  *  parameters are provided.
  */
 @property (strong, nonatomic, readonly) NSURL *authorizeURL;
+
+/** As `authorizeURL`, but you can supply additional parameters to be added to the URL. */
+- (NSURL *)authorizeURLWithAdditionalParameters:(NSDictionary *)params;
 
 /** The URL path, relative to the base URL, to be used to request a token code. */
 @property (copy, nonatomic, readonly) NSString *authorizePath;

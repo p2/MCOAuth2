@@ -1,5 +1,5 @@
 //
-//  MCOAuth2ThreeLegged.m
+//  MCOAuth2CodeGrant.m
 //  Ossus
 //
 //  Created by Pascal Pfiffner on 4/22/14.
@@ -10,6 +10,7 @@
 
 @interface MCOAuth2AuthCodeGrant ()
 
+@property (copy, nonatomic) NSDictionary *urlParams;
 @property (strong, nonatomic, readwrite) NSURL *authorizeURL;
 @property (copy, nonatomic, readwrite) NSString *authorizePath;
 
@@ -40,7 +41,7 @@
 		self.state = [[self class] newUUID];
 		
 		if (self.baseURL && _authorizePath && _clientId && _redirect) {
-			NSDictionary *params = @{
+			self.urlParams = @{
 				@"client_id": _clientId,
 				@"response_type": @"code",
 				@"redirect_uri": _redirect,
@@ -51,10 +52,10 @@
 			NSURLComponents *comp = [NSURLComponents componentsWithURL:self.baseURL resolvingAgainstBaseURL:YES];
 			NSAssert([comp.scheme isEqualToString:@"https"], @"You MUST use HTTPS!");
 			comp.path = [comp.path ?: @"" stringByAppendingPathComponent:authorize];
-			comp.query = [[self class] queryStringFor:params];
+			comp.query = [[self class] queryStringFor:_urlParams];
 			
 			self.authorizeURL = comp.URL;
-			NSAssert(_authorizeURL, @"Unable to create a valid URL from components. This usually happens when you supply paths without leading slash. Components: %@", comp);
+			NSAssert(_authorizeURL, @"Unable to create a valid URL from components. Components: %@", comp);
 		}
 	}
 	return self;
@@ -63,6 +64,28 @@
 
 
 #pragma mark - OAuth Dance
+
+- (NSURL *)authorizeURLWithAdditionalParameters:(NSDictionary *)params
+{
+	if (0 == [params count]) {
+		return _authorizeURL;
+	}
+	
+	NSAssert(_urlParams, @"Must possess URL params after initialization");
+	NSURLComponents *comp = [NSURLComponents componentsWithURL:self.baseURL resolvingAgainstBaseURL:YES];
+	NSAssert([comp.scheme isEqualToString:@"https"], @"You MUST use HTTPS!");
+	comp.path = [comp.path ?: @"" stringByAppendingPathComponent:_authorizePath];
+	
+	NSMutableDictionary *mute = [_urlParams mutableCopy];
+	[mute addEntriesFromDictionary:params];
+	comp.query = [[self class] queryStringFor:mute];
+	
+	NSURL *url = comp.URL;
+	NSAssert(url, @"Unable to create a valid URL from components. Components: %@", comp);
+	
+	return url;
+}
+
 
 /**
  *  Validates the params in the passed-in redirect URL.
