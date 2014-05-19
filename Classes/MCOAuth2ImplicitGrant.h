@@ -35,7 +35,7 @@
 /**
  *  Designated initializer.
  *
- *  If you need a different API URL you can set it after initialization.
+ *  If you need a different API URL you can set `apiURL` after initialization.
  *
  *  @param base The service's base URL, will be used to append OAuth and resource paths. E.g. @"https://www.service.com"
  *  @param authorize The path to the authorize URL when appended to `base`. E.g.: @"/oauth/authorize"
