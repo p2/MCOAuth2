@@ -8,35 +8,88 @@
 #import "MCOAuth2.h"
 
 
+@interface MCOAuth2 ()
+
+@property (copy, nonatomic, readwrite) NSDictionary *settings;
+@property (copy, nonatomic, readwrite) NSString *redirect;
+@property (copy, nonatomic, readwrite) NSString *scope;
+
+@end
+
+
 @implementation MCOAuth2
 
 
-- (id)initWithBaseURL:(NSURL *)base
+- (id)initWithSettings:(NSDictionary *)settings
 {
-	return [self initWithBaseURL:base apiURL:nil];
-}
-
-- (id)initWithBaseURL:(NSURL *)base apiURL:(NSURL *)api
-{
-	NSParameterAssert(base);
+	NSParameterAssert(settings);
 	if ((self = [super init])) {
-		self.baseURL = base;
-		self.apiURL = api;
+		self.settings = settings;
+		self.clientId = settings[@"client_id"];
+		
+		if ([settings[@"api_uri"] length] > 0) {
+			self.apiURL = [NSURL URLWithString:settings[@"api_uri"]];
+		}
+		if ([settings[@"authorize_uri"] length] > 0) {
+			self.authorizeURL = [NSURL URLWithString:settings[@"authorize_uri"]];
+		}
 	}
 	return self;
 }
 
 
 
-#pragma mark - URLs
-- (NSURL *)apiURL
+#pragma mark - OAuth Actions
+
+- (NSURL *)authorizeURLWithRedirect:(NSString *)redirect scope:(NSString *)scope additionalParameters:(NSDictionary *)params;
 {
-	return _apiURL ?: _baseURL;
+	@throw [NSException exceptionWithName:@"MCOAuth2AbstractClassUse" reason:@"No no, this is not the class you're looking for" userInfo:nil];
 }
 
-
-
-#pragma mark - OAuth Actions
+- (NSURL *)urlWithBase:(NSURL *)url redirect:(NSString *)redirect scope:(NSString *)scope additionalParameters:(NSDictionary *)params
+{
+	if (!self.clientId) {
+		@throw [NSException exceptionWithName:@"MCOAuth2IncompletSetup" reason:@"I do not yet have a client id, cannot construct an authorize URL" userInfo:nil];
+	}
+	if (!url) {
+		NSLog(@"I need a base URL to create the full URL");
+		return nil;
+	}
+	
+	if (!redirect) {
+		redirect = [_settings[@"redirect_uris"] firstObject];
+		if (!redirect) {
+			return nil;
+		}
+	}
+	self.redirect = redirect;
+	
+	if (scope) {
+		self.scope = scope;
+	}
+	if (!_state) {
+		self.state = [[self class] newUUID];
+	}
+	
+	NSURLComponents *comp = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:YES];
+	NSAssert([comp.scheme isEqualToString:@"https"], @"You MUST use HTTPS!");
+	
+	// compose the URL
+	NSMutableDictionary *urlParams = [@{
+		@"client_id": self.clientId,
+		@"redirect_uri": _redirect,
+		@"scope": _scope ?: (_settings[@"scope"] ?: [NSNull null]),
+		@"state": _state
+	} mutableCopy];
+	
+	[urlParams addEntriesFromDictionary:params];
+	comp.query = [[self class] queryStringFor:urlParams];
+	
+	NSURL *final = comp.URL;
+	NSAssert(final, @"Unable to create a valid URL from components. Components: %@", comp);
+	
+	return final;
+}
 
 - (void)exchangeTokenWithRedirectURL:(NSURL *)url callback:(void (^)(BOOL didCancel, NSError *error))callback;
 {
@@ -97,6 +150,7 @@
 
 
 #pragma mark - Utilities
+
 + (NSString *)newUUID
 {
 	CFUUIDRef uuid = CFUUIDCreate(NULL);
@@ -133,7 +187,6 @@
 	return params;
 }
 
-
 + (NSError *)errorForAccessTokenErrorResponse:(NSDictionary *)params
 {
 	NSString *message = nil;
@@ -141,7 +194,7 @@
 	// "error_description" is optional, we prefer it if it's present
 	NSString *err_msg = params[@"error_description"];
 	if ([err_msg length] > 0) {
-		message = err_msg;
+		message = [err_msg stringByReplacingOccurrencesOfString:@"+" withString:@" "];
 	}
 	
 	// the "error" response is required for error responses

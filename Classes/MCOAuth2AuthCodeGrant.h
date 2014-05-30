@@ -15,58 +15,15 @@
  */
 @interface MCOAuth2AuthCodeGrant : MCOAuth2
 
-/** The client id. */
-@property (copy, nonatomic) NSString *clientId;
-
 /** The client secret. */
 @property (copy, nonatomic) NSString *clientSecret;
 
-/** The redirect URL registered with the service provider. */
-@property (copy, nonatomic) NSString *redirect;
-
-
-/**
- *  The URL that should be used to authorize against, will be created from `authorizePath` and parameters passed during initialization IF AND ONLY IF those
- *  parameters are provided.
- */
-@property (strong, nonatomic, readonly) NSURL *authorizeURL;
-
-/** As `authorizeURL`, but you can supply additional parameters to be added to the URL. */
-- (NSURL *)authorizeURLWithAdditionalParameters:(NSDictionary *)params;
-
-/** The URL path, relative to the base URL, to be used to request a token code. */
-@property (copy, nonatomic, readonly) NSString *authorizePath;
-
-/** The URL path, relative to the base URL, to be used to exchange a token code for an access token. */
-@property (copy, nonatomic) NSString *tokenPath;
-
-/** The code that can be traded for an access token. */
-@property (copy, nonatomic) NSString *code;
+/** The URL to be used to exchange a token code for an access token. */
+@property (strong, nonatomic) NSURL *tokenURL;
 
 /** A long-lived refresh token. */
 @property (copy, nonatomic) NSString *refreshToken;
 
-
-/**
- *  Designated initializer.
- *
- *  If you need a different API URL you can set it after initialization.
- *
- *  @param base The service's base URL, will be used to append OAuth and resource paths. E.g. @"https://www.service.com"
- *  @param authorize The path to the authorize URL when appended to `base`; don't forget the leading "/". E.g.: @"/oauth/authorize"
- *  @param token The path to the give-me-a-token URL when appended to `base`. E.g. @"/oauth/token"
- *  @param clientId Your client-id (or client-key)
- *  @param secret Your client secret
- *  @param redirect Your redirect URL
- *  @param scope The access scope you want to request
- */
-- (id)initWithBaseURL:(NSURL *)base
-			authorize:(NSString *)authorize
-				token:(NSString *)token
-			 clientId:(NSString *)clientId
-			   secret:(NSString *)secret
-			 redirect:(NSString *)redirect
-				scope:(NSString *)scope;
 
 /**
  *  Call this when you receive the redirect from your web view controller or browser, simply passing in the redirect URL returned by the server.
