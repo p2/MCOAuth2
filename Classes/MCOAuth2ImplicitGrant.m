@@ -26,7 +26,7 @@
 		params = @{@"response_type": @"token"};
 	}
 	
-	return [self urlWithBase:self.authorizeURL redirect:redirect scope:scope additionalParameters:params];
+	return [self authorizeURLWithBase:self.authorizeURL redirect:redirect scope:scope additionalParameters:params];
 }
 
 - (void)handleRedirectURL:(NSURL *)url callback:(void (^)(BOOL didCancel, NSError *error))callback

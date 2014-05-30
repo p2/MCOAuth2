@@ -41,6 +41,7 @@
 /**
  *  Designated initializer, key support is experimental and currently informed by MITREid's reference implementation, with these additional
  *  keys:
+ *    - api_uri
  *    - authorize_uri
  *    - token_uri (for code grant)
  *    - scope
@@ -72,10 +73,22 @@
  *  @param scope The scope to request
  *  @param params Any additional parameters
  */
-- (NSURL *)urlWithBase:(NSURL *)url redirect:(NSString *)redirect scope:(NSString *)scope additionalParameters:(NSDictionary *)params;
+- (NSURL *)authorizeURLWithBase:(NSURL *)url redirect:(NSString *)redirect scope:(NSString *)scope additionalParameters:(NSDictionary *)params;
 
 
 #pragma mark Resource Requests
+
+/**
+ *  Requests a resource, optionally with a specific type.
+ *
+ *	If the returned data is nil and error is nil, the request has been aborted. Check for an error, if none occurred check for data and handle the data,
+ *  otherwise do nothing.
+ *
+ *  @param restPath The REST path, appended to the receiver's `apiURL`
+ *  @param accept Optional; the mime type to request in an "Accept:" header
+ *  @param callback A callback that will have `didCancel` = NO and `error` = nil on success
+ */
+- (void)requestResource:(NSString *)restPath accept:(NSString *)accept callback:(void (^)(NSData *data, NSError *error))callback;
 
 /**
  *  Request a resource that returns JSON data.

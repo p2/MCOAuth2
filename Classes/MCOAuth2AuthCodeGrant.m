@@ -36,17 +36,11 @@
 
 - (NSURL *)authorizeURLWithRedirect:(NSString *)redirect scope:(NSString *)scope additionalParameters:(NSDictionary *)params
 {
-	if ([params count] > 0) {
-		NSMutableDictionary *mute = [params mutableCopy];
-		mute[@"response_type"] = @"code";
-		[mute addEntriesFromDictionary:params];
-		params = [mute copy];
-	}
-	else {
-		params = @{@"response_type": @"code"};
-	}
+	NSMutableDictionary *mute = ([params count] > 0) ? [params mutableCopy] : [NSMutableDictionary dictionaryWithCapacity:1];
+	mute[@"response_type"] = @"code";
+	[mute addEntriesFromDictionary:params];
 	
-	return [self urlWithBase:self.authorizeURL redirect:redirect scope:scope additionalParameters:params];
+	return [self authorizeURLWithBase:self.authorizeURL redirect:redirect scope:scope additionalParameters:[mute copy]];
 }
 
 - (void)exchangeTokenWithRedirectURL:(NSURL *)url callback:(void (^)(BOOL, NSError *))callback
@@ -77,7 +71,16 @@
 		return;
 	}
 	
-	// do we have the exchange URL and other params?
+	// do we have the client secret and an exchange URL?
+	if (!_clientSecret) {
+		if (callback) {
+			NSError *error = nil;
+			MC_ERR(&error, @"I do not yet have a client secret, cannot exchange code for a token", 0);
+			callback(NO, error);
+		}
+		return;
+	}
+	
 	if (!_tokenURL) {
 		if (callback) {
 			NSError *error = nil;
@@ -87,13 +90,16 @@
 		return;
 	}
 	
+	// construct a POST (form-urlencoded) request
 	NSDictionary *params = @{
+		@"client_id": self.clientId,
+		@"client_secret": self.clientSecret,
+		@"redirect_uri": self.redirect,
 		@"grant_type": @"authorization_code",
-		@"code": _code
+		@"code": self.code
 	};
-	NSURL *url = [self urlWithBase:_tokenURL redirect:self.redirect scope:self.scope additionalParameters:params];
 	
-	NSMutableURLRequest *post = [[NSMutableURLRequest alloc] initWithURL:url];
+	NSMutableURLRequest *post = [[NSMutableURLRequest alloc] initWithURL:self.tokenURL];
 	[post setHTTPMethod:@"POST"];
 	[post setValue:@"application/x-www-form-urlencoded; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
 	[post setHTTPBody:[[[self class] queryStringFor:params] dataUsingEncoding:NSUTF8StringEncoding]];
@@ -103,18 +109,26 @@
 		NSError *error = connectionError;
 		if (!error) {
 			NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
-			if ([http isKindOfClass:[NSHTTPURLResponse class]] && 200 == http.statusCode) {
-				
-				// success, store token
-				NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
-				if (json) {
-					self.accessToken = json[@"access_token"];
-					self.refreshToken = json[@"refresh_token"];
+			if ([http isKindOfClass:[NSHTTPURLResponse class]]) {
+				if (200 == http.statusCode) {
 					
-					if (callback) {
-						callback(NO, nil);
+					// success, store token
+					NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+					if (json) {
+						self.accessToken = json[@"access_token"];
+						self.refreshToken = json[@"refresh_token"];
+						
+						if (callback) {
+							callback(NO, nil);
+						}
+						return;
 					}
-					return;
+					else {
+						
+					}
+				}
+				else {
+					MC_ERR(&error, [NSHTTPURLResponse localizedStringForStatusCode:http.statusCode], http.statusCode)
 				}
 			}
 		}

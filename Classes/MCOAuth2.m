@@ -46,7 +46,7 @@
 	@throw [NSException exceptionWithName:@"MCOAuth2AbstractClassUse" reason:@"No no, this is not the class you're looking for" userInfo:nil];
 }
 
-- (NSURL *)urlWithBase:(NSURL *)url redirect:(NSString *)redirect scope:(NSString *)scope additionalParameters:(NSDictionary *)params
+- (NSURL *)authorizeURLWithBase:(NSURL *)url redirect:(NSString *)redirect scope:(NSString *)scope additionalParameters:(NSDictionary *)params
 {
 	if (!self.clientId) {
 		@throw [NSException exceptionWithName:@"MCOAuth2IncompletSetup" reason:@"I do not yet have a client id, cannot construct an authorize URL" userInfo:nil];
@@ -100,7 +100,7 @@
 
 #pragma mark - Resource Requests
 
-- (void)requestJSONResource:(NSString *)restPath callback:(void (^)(id jsonObject, NSError *error))callback
+- (void)requestResource:(NSString *)restPath accept:(NSString *)accept callback:(void (^)(NSData *data, NSError *error))callback
 {
 	NSParameterAssert(restPath);
 	if (!self.accessToken) {
@@ -117,7 +117,9 @@
 	comp.path = [comp.path ?: @"" stringByAppendingPathComponent:restPath];
 	
 	NSMutableURLRequest *get = [[NSMutableURLRequest alloc] initWithURL:comp.URL];
-	[get setValue:@"application/json" forHTTPHeaderField:@"Accept"];
+	if (accept) {
+		[get setValue:accept forHTTPHeaderField:@"Accept"];
+	}
 	[get setValue:[NSString stringWithFormat:@"Bearer %@", self.accessToken] forHTTPHeaderField:@"Authorization"];
 	
 	// send the GET request
@@ -128,10 +130,9 @@
 			if ([http isKindOfClass:[NSHTTPURLResponse class]]) {
 				if (200 == http.statusCode) {
 					
-					// success, deserialize JSON and call the callback
-					NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+					// success
 					if (callback) {
-						callback(json, error);
+						callback(data, nil);
 					}
 					return;
 				}
@@ -143,6 +144,19 @@
 		
 		if (callback) {
 			callback(nil, error ?: [NSError errorWithDomain:NSCocoaErrorDomain code:0 userInfo:@{NSLocalizedDescriptionKey: @"Unknown response error"}]);
+		}
+	}];
+}
+
+- (void)requestJSONResource:(NSString *)restPath callback:(void (^)(id jsonObject, NSError *error))callback
+{
+	[self requestResource:restPath accept:@"application/json" callback:^(NSData *data, NSError *error) {
+		NSDictionary *json = nil;
+		if (data) {
+			json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+		}
+		if (callback) {
+			callback(json, error);
 		}
 	}];
 }
