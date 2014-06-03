@@ -31,7 +31,10 @@
 
 - (void)handleRedirectURL:(NSURL *)url callback:(void (^)(BOOL didCancel, NSError *error))callback
 {
+	[self logIfVerbose:@"Handling redirect URL", [url description], nil];
 	NSError *error = nil;
+	
+	// exctract token from URL fragment
 	NSURLComponents *comp = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:YES];
 	if (comp.fragment) {
 		NSDictionary *params = [[self class] paramsFromQuery:comp.fragment];
@@ -42,6 +45,7 @@
 			// got a token, use it if state checks out
 			if ([params[@"state"] isEqualToString:self.state]) {
 				self.accessToken = token;
+				[self logIfVerbose:@"Successfully extracted access token", nil];
 			}
 			else {
 				NSString *errstr = [NSString stringWithFormat:@"Invalid state \"%@\", will not use the token", params[@"state"]];
@@ -57,6 +61,10 @@
 		MC_ERR(&error, errstr, 0)
 	}
 	
+	// log, if needed, then call the callback
+	if (error) {
+		[self logIfVerbose:@"Error handling redirect URL:", [error localizedDescription], nil];
+	}
 	if (callback) {
 		callback(NO, error);
 	}

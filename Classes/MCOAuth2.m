@@ -33,6 +33,9 @@
 		if ([settings[@"authorize_uri"] length] > 0) {
 			self.authorizeURL = [NSURL URLWithString:settings[@"authorize_uri"]];
 		}
+		self.verbose = ([settings[@"verbose"] boolValue]);
+		
+		[self logIfVerbose:@"Initialized with client id %@", _clientId, nil];
 	}
 	return self;
 }
@@ -48,18 +51,19 @@
 
 - (NSURL *)authorizeURLWithBase:(NSURL *)url redirect:(NSString *)redirect scope:(NSString *)scope additionalParameters:(NSDictionary *)params
 {
+	[self logIfVerbose:@"Starting authorization against", [url description], nil];
+	
 	if (!self.clientId) {
 		@throw [NSException exceptionWithName:@"MCOAuth2IncompletSetup" reason:@"I do not yet have a client id, cannot construct an authorize URL" userInfo:nil];
 	}
 	if (!url) {
-		NSLog(@"I need a base URL to create the full URL");
-		return nil;
+		@throw [NSException exceptionWithName:@"MCOAuth2IncompletSetup" reason:@"I need a base URL to create the full authorize URL" userInfo:nil];
 	}
 	
 	if (!redirect) {
 		redirect = [_settings[@"redirect_uris"] firstObject];
 		if (!redirect) {
-			return nil;
+			@throw [NSException exceptionWithName:@"MCOAuth2IncompletSetup" reason:@"I need a redirect URI, cannot construct an authorize URL" userInfo:nil];
 		}
 	}
 	self.redirect = redirect;
@@ -88,6 +92,7 @@
 	NSURL *final = comp.URL;
 	NSAssert(final, @"Unable to create a valid URL from components. Components: %@", comp);
 	
+	[self logIfVerbose:@"Authorizing against", [final description], nil];
 	return final;
 }
 
@@ -123,6 +128,7 @@
 	[get setValue:[NSString stringWithFormat:@"Bearer %@", self.accessToken] forHTTPHeaderField:@"Authorization"];
 	
 	// send the GET request
+	[self logIfVerbose:@"Requesting resource from", [get.URL description], nil];
 	[NSURLConnection sendAsynchronousRequest:get queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse *response, NSData *data, NSError *connectionError) {
 		NSError *error = connectionError;
 		if (!error) {
@@ -164,6 +170,24 @@
 
 
 #pragma mark - Utilities
+
+- (void)logIfVerbose:(NSString *)log, ...
+{
+	if (_verbose && log) {
+		NSString *str;
+		NSMutableArray *strs = [NSMutableArray arrayWithObject:log];
+		
+		va_list args;
+		va_start(args, log);
+		while ((str = va_arg(args, NSString*))) {
+			if ([str length] > 0) {
+				[strs addObject:str];
+			}
+		}
+		
+		NSLog(@"%@", [strs componentsJoinedByString:@" "]);
+	}
+}
 
 + (NSString *)newUUID
 {

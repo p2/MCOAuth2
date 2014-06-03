@@ -37,6 +37,9 @@
 /** The state sent to the server when requesting a token; we internally generate a UUID unless it's set manually. */
 @property (copy, nonatomic) NSString *state;
 
+/** Set to YES to log all the things. NO by default. */
+@property (nonatomic) BOOL verbose;
+
 
 /**
  *  Designated initializer, key support is experimental and currently informed by MITREid's reference implementation, with these additional
@@ -45,6 +48,7 @@
  *    - authorize_uri
  *    - token_uri (for code grant)
  *    - scope
+ *    - verbose (applies to client logging, unrelated to the actual OAuth exchange)
  *  MITREid: https://github.com/mitreid-connect/
  */
 - (id)initWithSettings:(NSDictionary *)settings;
@@ -103,6 +107,9 @@
 
 
 #pragma mark Utilities
+
+/** Debug logging, will only log if `verbose` is YES. */
+- (void)logIfVerbose:(NSString *)log, ...;
 
 /** Return a new UUID. */
 + (NSString *)newUUID;
