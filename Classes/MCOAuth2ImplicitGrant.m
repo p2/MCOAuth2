@@ -44,8 +44,7 @@
 			
 			// got a token, use it if state checks out
 			if ([params[@"state"] isEqualToString:self.state]) {
-				self.accessToken = token;
-				[self logIfVerbose:@"Successfully extracted access token", nil];
+				[self didAuthorizeWithParameters:params];
 			}
 			else {
 				NSString *errstr = [NSString stringWithFormat:@"Invalid state \"%@\", will not use the token", params[@"state"]];
@@ -68,6 +67,14 @@
 	if (callback) {
 		callback(NO, error);
 	}
+}
+
+- (void)didAuthorizeWithParameters:(NSDictionary *)params
+{
+	self.accessToken = params[@"access_token"];
+	[self logIfVerbose:@"Successfully extracted access token", nil];
+	
+	[super didAuthorizeWithParameters:params];
 }
 
 

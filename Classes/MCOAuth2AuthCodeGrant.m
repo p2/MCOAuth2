@@ -59,32 +59,24 @@
 
 - (void)exchangeCodeForToken:(NSString *)code callback:(void (^)(BOOL, NSError *))callback
 {
+	[self logIfVerbose:@"Exchanging code for access token:", code, nil];
+	
+	NSError *error = nil;
 	self.code = code;
 	
-	// do we have a code?
+	// do we have a code, client secret and an exchange URL?
 	if (!_code) {
-		if (callback) {
-			NSError *error = nil;
-			MC_ERR(&error, @"I don't have a code to exchange, let the user authorize first", 0);
-			callback(NO, error);
-		}
-		return;
+		MC_ERR(&error, @"I don't have a code to exchange, let the user authorize first", 0);
+	}
+	else if (!_clientSecret) {
+		MC_ERR(&error, @"I do not yet have a client secret, cannot exchange code for a token", 0);
+	}
+	else if (!_tokenURL) {
+		MC_ERR(&error, @"I'm missing `tokenURL`, please configure me correctly", 0);
 	}
 	
-	// do we have the client secret and an exchange URL?
-	if (!_clientSecret) {
+	if (error) {
 		if (callback) {
-			NSError *error = nil;
-			MC_ERR(&error, @"I do not yet have a client secret, cannot exchange code for a token", 0);
-			callback(NO, error);
-		}
-		return;
-	}
-	
-	if (!_tokenURL) {
-		if (callback) {
-			NSError *error = nil;
-			MC_ERR(&error, @"I'm missing `tokenURL`, please configure me correctly", 0);
 			callback(NO, error);
 		}
 		return;
@@ -111,32 +103,44 @@
 			NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
 			if ([http isKindOfClass:[NSHTTPURLResponse class]]) {
 				if (200 == http.statusCode) {
-					
-					// success, store token
 					NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
-					if (json) {
-						self.accessToken = json[@"access_token"];
-						self.refreshToken = json[@"refresh_token"];
+					if ([json isKindOfClass:[NSDictionary class]]) {
 						
-						if (callback) {
-							callback(NO, nil);
+						// got a token
+						if ([json[@"access_token"] length] > 0) {
+							[self didAuthorizeWithParameters:json];
 						}
-						return;
+						else {
+							error = [[self class] errorForAccessTokenErrorResponse:json];
+						}
 					}
 					else {
-						
+						NSString *err_msg = [NSString stringWithFormat:@"Expected a JSON encoded dictionary, but got: %@", json];
+						MC_ERR(&error, err_msg, 0);
 					}
 				}
 				else {
 					MC_ERR(&error, [NSHTTPURLResponse localizedStringForStatusCode:http.statusCode], http.statusCode)
 				}
 			}
+			else {
+				MC_ERR(&error, @"Unknown connection error", 0)
+			}
 		}
 		
 		if (callback) {
-			callback(NO, error ?: [NSError errorWithDomain:NSCocoaErrorDomain code:0 userInfo:@{NSLocalizedDescriptionKey: @"Unknown connection error"}]);
+			callback(NO, error);
 		}
 	}];
+}
+
+- (void)didAuthorizeWithParameters:(NSDictionary *)params
+{
+	self.accessToken = params[@"access_token"];
+	self.refreshToken = params[@"refresh_token"];
+	[self logIfVerbose:@"Successfully extracted access token", nil];
+	
+	[super didAuthorizeWithParameters:params];
 }
 
 
@@ -145,6 +149,8 @@
 
 - (BOOL)validateRedirectURL:(NSURL *)url error:(NSError **)error
 {
+	[self logIfVerbose:@"Validating redirect URL", [url description], nil];
+	
 	NSURLComponents *comp = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:YES];
 	if (!comp) {
 		MC_ERR(error, @"Invalid redirect URI", 0)

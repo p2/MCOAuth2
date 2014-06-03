@@ -101,6 +101,13 @@
 	@throw [NSException exceptionWithName:@"MCOAuth2AbstractClassUse" reason:@"Oh snap, should have used a subclass" userInfo:nil];
 }
 
+- (void)didAuthorizeWithParameters:(NSDictionary *)params
+{
+	if ([_delegate respondsToSelector:@selector(oauth2:didAuthorizeWithParameters:)]) {
+		[_delegate oauth2:self didAuthorizeWithParameters:params];
+	}
+}
+
 
 
 #pragma mark - Resource Requests
@@ -180,9 +187,7 @@
 		va_list args;
 		va_start(args, log);
 		while ((str = va_arg(args, NSString*))) {
-			if ([str length] > 0) {
-				[strs addObject:str];
-			}
+			[strs addObject:(([str length] > 0) ? str : @"[empty string]")];
 		}
 		
 		NSLog(@"%@", [strs componentsJoinedByString:@" "]);

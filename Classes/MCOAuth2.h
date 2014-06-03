@@ -6,12 +6,27 @@
 //
 
 @import Foundation;
+@class MCOAuth2;
+
+
+/**
+ *  OAuth2 delegate protocol
+ */
+@protocol MCOAuth2Delegate <NSObject>
+
+@optional
+- (void)oauth2:(MCOAuth2 *)oauth2 didAuthorizeWithParameters:(NSDictionary *)params;
+
+@end
 
 
 /**
  *  An abstract superclass for our simple OAuth2 client.
  */
 @interface MCOAuth2 : NSObject
+
+/** An optional delegate. */
+@property (weak, nonatomic) id<MCOAuth2Delegate> delegate;
 
 /** The client id. */
 @property (copy, nonatomic) NSString *clientId;
@@ -78,6 +93,13 @@
  *  @param params Any additional parameters
  */
 - (NSURL *)authorizeURLWithBase:(NSURL *)url redirect:(NSString *)redirect scope:(NSString *)scope additionalParameters:(NSDictionary *)params;
+
+/**
+ *  Called with all parameters that are returned in a valid (!) response carrying the access token.
+ *
+ *  Subclasses should call super at one point to ensure that the delegate receives the callback.
+ */
+- (void)didAuthorizeWithParameters:(NSDictionary *)params;
 
 
 #pragma mark Resource Requests
