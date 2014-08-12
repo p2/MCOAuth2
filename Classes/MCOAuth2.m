@@ -54,7 +54,7 @@
 		if (callback) {
 			NSError *error = nil;
 			MC_ERR(&error, @"I don't yet have an access token, cannot request data", 0)
-			callback(NO, error);
+			callback(nil, error);
 		}
 		return;
 	}
