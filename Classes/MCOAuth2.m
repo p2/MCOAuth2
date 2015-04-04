@@ -97,13 +97,10 @@
 
 
 #pragma mark - Utilities
+
 + (NSString *)newUUID
 {
-	CFUUIDRef uuid = CFUUIDCreate(NULL);
-	NSString *str = (__bridge_transfer NSString *)CFUUIDCreateString(NULL, uuid);
-	CFRelease(uuid);
-	
-	return str;
+	return [[NSUUID UUID] UUIDString];
 }
 
 + (NSString *)queryStringFor:(NSDictionary *)params

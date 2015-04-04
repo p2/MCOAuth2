@@ -38,7 +38,7 @@
 		self.clientId = clientId;
 		self.clientSecret = secret;
 		self.redirect = redirect;
-		self.state = [[self class] newUUID];
+		self.state = [[[self class] newUUID] substringToIndex:8];
 		
 		if (self.baseURL && _authorizePath && _clientId && _redirect) {
 			self.urlParams = @{
@@ -98,9 +98,8 @@
 		return NO;
 	}
 	
-	NSDictionary *query = [[self class] paramsFromQuery:comp.query];
-	
 	// did we get a code?
+	NSDictionary *query = [[self class] paramsFromQuery:comp.percentEncodedQuery];
 	NSString *code = query[@"code"];
 	if (code) {
 		if ([query[@"state"] isEqualToString:_state]) {
