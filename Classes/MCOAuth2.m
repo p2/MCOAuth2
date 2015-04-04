@@ -8,46 +8,111 @@
 #import "MCOAuth2.h"
 
 
+@interface MCOAuth2 ()
+
+@property (copy, nonatomic, readwrite) NSDictionary *settings;
+@property (copy, nonatomic, readwrite) NSString *redirect;
+@property (copy, nonatomic, readwrite) NSString *scope;
+
+@end
+
+
 @implementation MCOAuth2
 
 
-- (id)initWithBaseURL:(NSURL *)base
+- (id)initWithSettings:(NSDictionary *)settings
 {
-	return [self initWithBaseURL:base apiURL:nil];
-}
-
-- (id)initWithBaseURL:(NSURL *)base apiURL:(NSURL *)api
-{
-	NSParameterAssert(base);
+	NSParameterAssert(settings);
 	if ((self = [super init])) {
-		self.baseURL = base;
-		self.apiURL = api;
+		self.settings = settings;
+		self.clientId = settings[@"client_id"];
+		
+		if ([settings[@"api_uri"] length] > 0) {
+			self.apiURL = [NSURL URLWithString:settings[@"api_uri"]];
+		}
+		if ([settings[@"authorize_uri"] length] > 0) {
+			self.authorizeURL = [NSURL URLWithString:settings[@"authorize_uri"]];
+		}
+		self.verbose = ([settings[@"verbose"] boolValue]);
+		
+		[self logIfVerbose:@"Initialized with client id", _clientId, nil];
 	}
 	return self;
 }
 
 
 
-#pragma mark - URLs
-- (NSURL *)apiURL
+#pragma mark - OAuth Actions
+
+- (NSURL *)authorizeURLWithRedirect:(NSString *)redirect scope:(NSString *)scope additionalParameters:(NSDictionary *)params;
 {
-	return _apiURL ?: _baseURL;
+	@throw [NSException exceptionWithName:@"MCOAuth2AbstractClassUse" reason:@"No no, this is not the class you're looking for" userInfo:nil];
 }
 
-
-
-#pragma mark - OAuth Actions
+- (NSURL *)authorizeURLWithBase:(NSURL *)url redirect:(NSString *)redirect scope:(NSString *)scope additionalParameters:(NSDictionary *)params
+{
+	[self logIfVerbose:@"Starting authorization against", [url description], nil];
+	
+	if (!self.clientId) {
+		@throw [NSException exceptionWithName:@"MCOAuth2IncompletSetup" reason:@"I do not yet have a client id, cannot construct an authorize URL" userInfo:nil];
+	}
+	if (!url) {
+		@throw [NSException exceptionWithName:@"MCOAuth2IncompletSetup" reason:@"I need a base URL to create the full authorize URL" userInfo:nil];
+	}
+	
+	if (!redirect) {
+		redirect = [_settings[@"redirect_uris"] firstObject];
+		if (!redirect) {
+			@throw [NSException exceptionWithName:@"MCOAuth2IncompletSetup" reason:@"I need a redirect URI, cannot construct an authorize URL" userInfo:nil];
+		}
+	}
+	self.redirect = redirect;
+	
+	if (scope) {
+		self.scope = scope;
+	}
+	if (!_state) {
+		self.state = [[[self class] newUUID] substringFromIndex:25];
+	}
+	
+	NSURLComponents *comp = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:YES];
+	NSAssert([comp.scheme isEqualToString:@"https"], @"You MUST use HTTPS!");
+	
+	// compose the URL
+	NSMutableDictionary *urlParams = [@{
+		@"client_id": self.clientId,
+		@"redirect_uri": _redirect,
+		@"scope": _scope ?: (_settings[@"scope"] ?: [NSNull null]),
+		@"state": _state
+	} mutableCopy];
+	
+	[urlParams addEntriesFromDictionary:params];
+	comp.query = [[self class] queryStringFor:urlParams];
+	
+	NSURL *final = comp.URL;
+	NSAssert(final, @"Unable to create a valid URL from components. Components: %@", comp);
+	
+	[self logIfVerbose:@"Authorizing against", [final description], nil];
+	return final;
+}
 
 - (void)exchangeTokenWithRedirectURL:(NSURL *)url callback:(void (^)(BOOL didCancel, NSError *error))callback;
 {
 	@throw [NSException exceptionWithName:@"MCOAuth2AbstractClassUse" reason:@"Oh snap, should have used a subclass" userInfo:nil];
 }
 
+- (void)didAuthorizeWithParameters:(NSDictionary *)params
+{
+	if ([_delegate respondsToSelector:@selector(oauth2:didAuthorizeWithParameters:)]) {
+		[_delegate oauth2:self didAuthorizeWithParameters:params];
+	}
+}
+
 
 
 #pragma mark - Resource Requests
 
-- (void)requestJSONResource:(NSString *)restPath callback:(void (^)(id jsonObject, NSError *error))callback
+- (void)requestResource:(NSString *)restPath accept:(NSString *)accept callback:(void (^)(NSData *data, NSError *error))callback
 {
 	NSParameterAssert(restPath);
 	if (!self.accessToken) {
@@ -64,10 +129,13 @@
 	comp.path = [comp.path ?: @"" stringByAppendingPathComponent:restPath];
 	
 	NSMutableURLRequest *get = [[NSMutableURLRequest alloc] initWithURL:comp.URL];
-	[get setValue:@"application/json" forHTTPHeaderField:@"Accept"];
+	if (accept) {
+		[get setValue:accept forHTTPHeaderField:@"Accept"];
+	}
 	[get setValue:[NSString stringWithFormat:@"Bearer %@", self.accessToken] forHTTPHeaderField:@"Authorization"];
 	
 	// send the GET request
+	[self logIfVerbose:@"Requesting resource from", [get.URL description], nil];
 	[NSURLConnection sendAsynchronousRequest:get queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse *response, NSData *data, NSError *connectionError) {
 		NSError *error = connectionError;
 		if (!error) {
@@ -75,10 +143,9 @@
 			if ([http isKindOfClass:[NSHTTPURLResponse class]]) {
 				if (200 == http.statusCode) {
 					
-					// success, deserialize JSON and call the callback
-					NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+					// success
 					if (callback) {
-						callback(json, error);
+						callback(data, nil);
 					}
 					return;
 				}
@@ -94,9 +161,38 @@
 	}];
 }
 
+- (void)requestJSONResource:(NSString *)restPath callback:(void (^)(id jsonObject, NSError *error))callback
+{
+	[self requestResource:restPath accept:@"application/json" callback:^(NSData *data, NSError *error) {
+		NSDictionary *json = nil;
+		if (data) {
+			json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+		}
+		if (callback) {
+			callback(json, error);
+		}
+	}];
+}
+
 
 
 #pragma mark - Utilities
+
+- (void)logIfVerbose:(NSString *)log, ...
+{
+	if (_verbose && log) {
+		NSString *str;
+		NSMutableArray *strs = [NSMutableArray arrayWithObject:log];
+		
+		va_list args;
+		va_start(args, log);
+		while ((str = va_arg(args, NSString*))) {
+			[strs addObject:(([str length] > 0) ? str : @"[empty string]")];
+		}
+		
+		NSLog(@"[MCOAuth2] %@", [strs componentsJoinedByString:@" "]);
+	}
+}
 
 + (NSString *)newUUID
 {
@@ -130,7 +226,6 @@
 	return params;
 }
 
-
 + (NSError *)errorForAccessTokenErrorResponse:(NSDictionary *)params
 {
 	NSString *message = nil;
@@ -138,7 +233,7 @@
 	// "error_description" is optional, we prefer it if it's present
 	NSString *err_msg = params[@"error_description"];
 	if ([err_msg length] > 0) {
-		message = err_msg;
+		message = [err_msg stringByReplacingOccurrencesOfString:@"+" withString:@" "];
 	}
 	
 	// the "error" response is required for error responses

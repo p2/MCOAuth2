@@ -9,60 +9,32 @@
 #import "MCOAuth2ImplicitGrant.h"
 
 
-@interface MCOAuth2ImplicitGrant ()
-
-@property (strong, nonatomic, readwrite) NSURL *authorizeURL;
-@property (copy, nonatomic, readwrite) NSString *authorizePath;
-
-/** The state is sent to the server when requesting a token code, we internally generate a UUID. */
-@property (copy, nonatomic) NSString *state;
-
-@end
-
-
 @implementation MCOAuth2ImplicitGrant
-
-
-- (id)initWithBaseURL:(NSURL *)base
-			authorize:(NSString *)authorize
-			 clientId:(NSString *)clientId
-			 redirect:(NSString *)redirect
-				scope:(NSString *)scope
-{
-	if ((self = [super initWithBaseURL:base apiURL:nil])) {
-		self.authorizePath = authorize;
-		self.clientId = clientId;
-		self.redirect = redirect;
-		self.state = [[self class] newUUID];
-		
-		if (self.baseURL && _authorizePath && _clientId && _redirect) {
-			NSDictionary *params = @{
-				@"client_id": _clientId,
-				@"response_type": @"token",
-				@"redirect_uri": _redirect ?: [NSNull null],
-				@"scope": scope ?: [NSNull null],
-				@"state": _state
-			};
-			
-			NSURLComponents *comp = [NSURLComponents componentsWithURL:self.baseURL resolvingAgainstBaseURL:YES];
-			NSAssert([comp.scheme isEqualToString:@"https"], @"You MUST use HTTPS!");
-			comp.path = [comp.path ?: @"" stringByAppendingPathComponent:authorize];
-			comp.query = [[self class] queryStringFor:params];
-			
-			self.authorizeURL = comp.URL;
-			NSAssert(_authorizeURL, @"Unable to create a valid URL from components. This usually happens when you supply paths without leading slash. Components: %@", comp);
-		}
-	}
-	return self;
-}
-
 
 
 #pragma mark - OAuth Actions
 
+- (NSURL *)authorizeURLWithRedirect:(NSString *)redirect scope:(NSString *)scope additionalParameters:(NSDictionary *)params
+{
+	if ([params count] > 0) {
+		NSMutableDictionary *mute = [params mutableCopy];
+		mute[@"response_type"] = @"token";
+		[mute addEntriesFromDictionary:params];
+		params = [mute copy];
+	}
+	else {
+		params = @{@"response_type": @"token"};
+	}
+	
+	return [self authorizeURLWithBase:self.authorizeURL redirect:redirect scope:scope additionalParameters:params];
+}
+
 - (void)handleRedirectURL:(NSURL *)url callback:(void (^)(BOOL didCancel, NSError *error))callback
 {
+	[self logIfVerbose:@"Handling redirect URL", [url description], nil];
 	NSError *error = nil;
+	
+	// exctract token from URL fragment
 	NSURLComponents *comp = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:YES];
 	if (comp.fragment) {
 		NSDictionary *params = [[self class] paramsFromQuery:comp.fragment];
@@ -71,17 +43,16 @@
 			NSAssert([@"bearer" isEqualToString:[params[@"token_type"] lowercaseString]], @"Only supporting \"bearer\" tokens for now");
 			
 			// got a token, use it if state checks out
-			if ([params[@"state"] isEqualToString:_state]) {
-				self.accessToken = token;
+			if ([params[@"state"] isEqualToString:self.state]) {
+				[self didAuthorizeWithParameters:params];
 			}
 			else {
-				NSString *errstr = [NSString stringWithFormat:@"Invalid state, will not use this token: %@", params[@"state"]];
+				NSString *errstr = [NSString stringWithFormat:@"Invalid state \"%@\", will not use the token", params[@"state"]];
 				MC_ERR(&error, errstr, 0)
 			}
 		}
 		else {
-			NSString *errstr = [NSString stringWithFormat:@"Did not receive a token in redirect URL: %@", url];
-			MC_ERR(&error, errstr, 0)
+			error = [[self class] errorForAccessTokenErrorResponse:params];
 		}
 	}
 	else {
@@ -89,9 +60,21 @@
 		MC_ERR(&error, errstr, 0)
 	}
 	
+	// log, if needed, then call the callback
+	if (error) {
+		[self logIfVerbose:@"Error handling redirect URL:", [error localizedDescription], nil];
+	}
 	if (callback) {
 		callback(NO, error);
 	}
+}
+
+- (void)didAuthorizeWithParameters:(NSDictionary *)params
+{
+	self.accessToken = params[@"access_token"];
+	[self logIfVerbose:@"Successfully extracted access token", nil];
+	
+	[super didAuthorizeWithParameters:params];
 }
 
 

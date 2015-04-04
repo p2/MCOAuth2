@@ -10,12 +10,8 @@
 
 @interface MCOAuth2AuthCodeGrant ()
 
-@property (copy, nonatomic) NSDictionary *urlParams;
-@property (strong, nonatomic, readwrite) NSURL *authorizeURL;
-@property (copy, nonatomic, readwrite) NSString *authorizePath;
-
-/** The state is sent to the server when requesting a token code, we internally generate a UUID. */
-@property (copy, nonatomic) NSString *state;
+/** The code that can be traded for an access token. */
+@property (copy, nonatomic) NSString *code;
 
 @end
 
@@ -23,39 +19,12 @@
 @implementation MCOAuth2AuthCodeGrant
 
 
-- (id)initWithBaseURL:(NSURL *)base
-			authorize:(NSString *)authorize
-				token:(NSString *)token
-			 clientId:(NSString *)clientId
-			   secret:(NSString *)secret
-			 redirect:(NSString *)redirect
-				scope:(NSString *)scope
+- (id)initWithSettings:(NSDictionary *)settings
 {
-	if ((self = [super initWithBaseURL:base apiURL:nil])) {
-		self.authorizePath = authorize;
-		self.tokenPath = token;
-		
-		self.clientId = clientId;
-		self.clientSecret = secret;
-		self.redirect = redirect;
-		self.state = [[[self class] newUUID] substringToIndex:8];
-		
-		if (self.baseURL && _authorizePath && _clientId && _redirect) {
-			self.urlParams = @{
-				@"client_id": _clientId,
-				@"response_type": @"code",
-				@"redirect_uri": _redirect,
-				@"scope": scope ?: [NSNull null],
-				@"state": _state
-			};
-			
-			NSURLComponents *comp = [NSURLComponents componentsWithURL:self.baseURL resolvingAgainstBaseURL:YES];
-			NSAssert([comp.scheme isEqualToString:@"https"], @"You MUST use HTTPS!");
-			comp.path = [comp.path ?: @"" stringByAppendingPathComponent:authorize];
-			comp.query = [[self class] queryStringFor:_urlParams];
-			
-			self.authorizeURL = comp.URL;
-			NSAssert(_authorizeURL, @"Unable to create a valid URL from components. Components: %@", comp);
+	if ((self = [super initWithSettings:settings])) {
+		self.clientSecret = settings[@"client_secret"];
+		if ([settings[@"token_uri"] length] > 0) {
+			self.tokenURL = [NSURL URLWithString:settings[@"token_uri"]];
 		}
 	}
 	return self;
@@ -65,59 +34,14 @@
 
 #pragma mark - OAuth Dance
 
-- (NSURL *)authorizeURLWithAdditionalParameters:(NSDictionary *)params
+- (NSURL *)authorizeURLWithRedirect:(NSString *)redirect scope:(NSString *)scope additionalParameters:(NSDictionary *)params
 {
-	if (0 == [params count]) {
-		return _authorizeURL;
-	}
-	
-	NSAssert(_urlParams, @"Must possess URL params after initialization");
-	NSURLComponents *comp = [NSURLComponents componentsWithURL:self.baseURL resolvingAgainstBaseURL:YES];
-	NSAssert([comp.scheme isEqualToString:@"https"], @"You MUST use HTTPS!");
-	comp.path = [comp.path ?: @"" stringByAppendingPathComponent:_authorizePath];
-	
-	NSMutableDictionary *mute = [_urlParams mutableCopy];
+	NSMutableDictionary *mute = ([params count] > 0) ? [params mutableCopy] : [NSMutableDictionary dictionaryWithCapacity:1];
+	mute[@"response_type"] = @"code";
 	[mute addEntriesFromDictionary:params];
-	comp.query = [[self class] queryStringFor:mute];
 	
-	NSURL *url = comp.URL;
-	NSAssert(url, @"Unable to create a valid URL from components. Components: %@", comp);
-	
-	return url;
+	return [self authorizeURLWithBase:self.authorizeURL redirect:redirect scope:scope additionalParameters:[mute copy]];
 }
-
-
-/**
- *  Validates the params in the passed-in redirect URL.
- */
-- (BOOL)validateRedirectURL:(NSURL *)url error:(NSError **)error
-{
-	NSURLComponents *comp = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:YES];
-	if (!comp) {
-		MC_ERR(error, @"Invalid redirect URI", 0)
-		return NO;
-	}
-	
-	// did we get a code?
-	NSDictionary *query = [[self class] paramsFromQuery:comp.percentEncodedQuery];
-	NSString *code = query[@"code"];
-	if (code) {
-		if ([query[@"state"] isEqualToString:_state]) {
-			self.code = code;
-			return YES;
-		}
-		
-		MC_ERR(error, @"Invalid \"state\" was returned, cannot continue", 0)
-		return NO;
-	}
-	
-	// error response
-	if (error != NULL) {
-		*error = [[self class] errorForAccessTokenErrorResponse:query];
-	}
-	return NO;
-}
-
 
 - (void)exchangeTokenWithRedirectURL:(NSURL *)url callback:(void (^)(BOOL, NSError *))callback
 {
@@ -134,32 +58,38 @@
 
 - (void)exchangeCodeForToken:(NSString *)code callback:(void (^)(BOOL, NSError *))callback
 {
+	[self logIfVerbose:@"Exchanging code for access token:", code, nil];
 	self.code = code;
 	
-	// do we have a code?
+	// do we have a code, client secret and an exchange URL?
+	NSError *error = nil;
 	if (!_code) {
+		MC_ERR(&error, @"I don't have a code to exchange, let the user authorize first", 0);
+	}
+	else if (!_clientSecret) {
+		MC_ERR(&error, @"I do not yet have a client secret, cannot exchange code for a token", 0);
+	}
+	else if (!_tokenURL) {
+		MC_ERR(&error, @"I'm missing `tokenURL`, please configure me correctly", 0);
+	}
+	
+	if (error) {
 		if (callback) {
-			NSError *error = nil;
-			MC_ERR(&error, @"I don't have a code to exchange, let the user authorize first", 0);
 			callback(NO, error);
 		}
 		return;
 	}
 	
-	// create a request for token exchange
+	// construct a POST (form-urlencoded) request
 	NSDictionary *params = @{
+		@"client_id": self.clientId,
+		@"client_secret": self.clientSecret,
+		@"redirect_uri": self.redirect,
 		@"grant_type": @"authorization_code",
-		@"client_id": _clientId,
-		@"client_secret": _clientSecret,
-		@"code": _code,
-		@"redirect_uri": _redirect
+		@"code": self.code
 	};
 	
-	NSURLComponents *comp = [NSURLComponents componentsWithURL:self.baseURL resolvingAgainstBaseURL:YES];
-	NSAssert([comp.scheme isEqualToString:@"https"], @"You MUST use HTTPS!");
-	comp.path = [comp.path ?: @"" stringByAppendingPathComponent:_tokenPath];
-	
-	NSMutableURLRequest *post = [[NSMutableURLRequest alloc] initWithURL:comp.URL];
+	NSMutableURLRequest *post = [[NSMutableURLRequest alloc] initWithURL:self.tokenURL];
 	[post setHTTPMethod:@"POST"];
 	[post setValue:@"application/x-www-form-urlencoded; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
 	[post setHTTPBody:[[[self class] queryStringFor:params] dataUsingEncoding:NSUTF8StringEncoding]];
@@ -169,26 +99,80 @@
 		NSError *error = connectionError;
 		if (!error) {
 			NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
-			if ([http isKindOfClass:[NSHTTPURLResponse class]] && 200 == http.statusCode) {
-				
-				// success, store token
-				NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
-				if (json) {
-					self.accessToken = json[@"access_token"];
-					self.refreshToken = json[@"refresh_token"];
-					
-					if (callback) {
-						callback(NO, nil);
+			if ([http isKindOfClass:[NSHTTPURLResponse class]]) {
+				if (200 == http.statusCode) {
+					NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+					if ([json isKindOfClass:[NSDictionary class]]) {
+						
+						// got a token
+						if ([json[@"access_token"] length] > 0) {
+							[self didAuthorizeWithParameters:json];
+						}
+						else {
+							error = [[self class] errorForAccessTokenErrorResponse:json];
+						}
 					}
-					return;
+					else {
+						NSString *err_msg = [NSString stringWithFormat:@"Expected a JSON encoded dictionary, but got: %@", json];
+						MC_ERR(&error, err_msg, 0);
+					}
 				}
+				else {
+					MC_ERR(&error, [NSHTTPURLResponse localizedStringForStatusCode:http.statusCode], http.statusCode)
+				}
+			}
+			else {
+				MC_ERR(&error, @"Unknown connection error", 0)
 			}
 		}
 		
 		if (callback) {
-			callback(NO, error ?: [NSError errorWithDomain:NSCocoaErrorDomain code:0 userInfo:@{NSLocalizedDescriptionKey: @"Unknown connection error"}]);
+			callback(NO, error);
 		}
 	}];
+}
+
+- (void)didAuthorizeWithParameters:(NSDictionary *)params
+{
+	self.accessToken = params[@"access_token"];
+	self.refreshToken = params[@"refresh_token"];
+	[self logIfVerbose:@"Successfully extracted access token", nil];
+	
+	[super didAuthorizeWithParameters:params];
+}
+
+
+
+#pragma mark - Utilities
+
+- (BOOL)validateRedirectURL:(NSURL *)url error:(NSError **)error
+{
+	[self logIfVerbose:@"Validating redirect URL", [url description], nil];
+	
+	NSURLComponents *comp = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:YES];
+	if (!comp) {
+		MC_ERR(error, @"Invalid redirect URI", 0)
+		return NO;
+	}
+	
+	// did we get a code?
+	NSDictionary *query = [[self class] paramsFromQuery:comp.percentEncodedQuery];
+	NSString *retCode = query[@"code"];
+	if (retCode) {
+		if ([query[@"state"] isEqualToString:self.state]) {
+			self.code = retCode;
+			return YES;
+		}
+		
+		MC_ERR(error, @"Invalid \"state\" was returned, cannot continue", 0)
+	}
+	
+	// server responded with an error
+	else if (error != NULL) {
+		*error = [[self class] errorForAccessTokenErrorResponse:query];
+	}
+	
+	return NO;
 }
 
 
