@@ -219,7 +219,7 @@
 	for (NSString *queryPart in queryParts) {
 		NSArray *parts = [queryPart componentsSeparatedByString:@"="];
 		if (2 == [parts count]) {
-			params[parts[0]] = parts[1];
+			params[parts[0]] = [parts[1] stringByRemovingPercentEncoding];
 		}
 	}
 	

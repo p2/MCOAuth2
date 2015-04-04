@@ -57,8 +57,8 @@
 
 
 /**
- *  Designated initializer, key support is experimental and currently informed by MITREid's reference implementation, with these additional
- *  keys:
+ *  Designated initializer, key support is experimental and currently informed by MITREid's reference implementation,
+ *  with these additional keys:
  *    - client_id
  *    - client_secret (for code grant)
  *    - api_uri
@@ -109,8 +109,8 @@
 /**
  *  Requests a resource, optionally with a specific type.
  *
- *	If the returned data is nil and error is nil, the request has been aborted. Check for an error, if none occurred check for data and handle the data,
- *  otherwise do nothing.
+ *	If the returned data is nil and error is nil, the request has been aborted. Check for an error, if none occurred
+ *  check for data and handle the data, otherwise do nothing.
  *
  *  @param restPath The REST path, appended to the receiver's `apiURL`
  *  @param accept Optional; the mime type to request in an "Accept:" header
@@ -121,8 +121,8 @@
 /**
  *  Request a resource that returns JSON data.
  *
- *	If the returned data is nil and error is nil, the request has been aborted. Check for an error, if none occurred check for json data and handle the data,
- *  otherwise do nothing.
+ *	If the returned data is nil and error is nil, the request has been aborted. Check for an error, if none occurred
+ *  check for json data and handle the data, otherwise do nothing.
  *
  *  @param restPath The REST path, appended to the receiver's `apiURL`. Don't forget the leading "/", e.g. @"/api/v1/profile"
  *  @param callback A callback that will have `didCancel` = NO and `error` = nil on success
@@ -141,7 +141,13 @@
 /** Create a query string from a dictionary. */
 + (NSString *)queryStringFor:(NSDictionary *)params;
 
-/** Parse a query string into a dictionary. */
+/**
+ *  Parse a query string into a dictionary.
+ *
+ *  This method will remove percent encoding, make sure to pass in the query string **without** removing percent
+ *  encoding first. NSURLComponent's `query` property will do that, you want to use its `percentEncodedQuery` property
+ *  instead.
+ */
 + (NSDictionary *)paramsFromQuery:(NSString *)query;
 
 /**
