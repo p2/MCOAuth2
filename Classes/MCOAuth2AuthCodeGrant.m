@@ -56,15 +56,15 @@
 	[self exchangeCodeForToken:_code callback:callback];
 }
 
-- (void)exchangeCodeForToken:(NSString *)code callback:(void (^)(BOOL, NSError *))callback
+- (void)exchangeCodeForToken:(NSString *)code callback:(void (^)(BOOL didCancel, NSError *error))callback
 {
-	[self logIfVerbose:@"Exchanging code for access token:", code, nil];
-	self.code = code;
-	
 	// do we have a code, client secret and an exchange URL?
 	NSError *error = nil;
 	if (!_code) {
 		MC_ERR(&error, @"I don't have a code to exchange, let the user authorize first", 0);
+	}
+	else if (!self.clientId) {
+		MC_ERR(&error, @"I do not yet have a client id, cannot exchange code for a token", 0);
 	}
 	else if (!_clientSecret) {
 		MC_ERR(&error, @"I do not yet have a client secret, cannot exchange code for a token", 0);
@@ -74,13 +74,17 @@
 	}
 	
 	if (error) {
+		[self logIfVerbose:@"Trying to exchange code for acces token, but", error.localizedDescription, nil];
 		if (callback) {
 			callback(NO, error);
 		}
 		return;
 	}
 	
-	// construct a POST (form-urlencoded) request
+	[self logIfVerbose:@"Exchanging code for access token:", code, nil];
+	self.code = code;
+	
+	// construct request dictionary and execute it
 	NSDictionary *params = @{
 		@"client_id": self.clientId,
 		@"client_secret": self.clientSecret,
@@ -89,47 +93,7 @@
 		@"code": self.code
 	};
 	
-	NSMutableURLRequest *post = [[NSMutableURLRequest alloc] initWithURL:self.tokenURL];
-	[post setHTTPMethod:@"POST"];
-	[post setValue:@"application/x-www-form-urlencoded; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
-	[post setHTTPBody:[[[self class] queryStringFor:params] dataUsingEncoding:NSUTF8StringEncoding]];
-	
-	// perform the exchange
-	[NSURLConnection sendAsynchronousRequest:post queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse *response, NSData *data, NSError *connectionError) {
-		NSError *error = connectionError;
-		if (!error) {
-			NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
-			if ([http isKindOfClass:[NSHTTPURLResponse class]]) {
-				if (200 == http.statusCode) {
-					NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
-					if ([json isKindOfClass:[NSDictionary class]]) {
-						
-						// got a token
-						if ([json[@"access_token"] length] > 0) {
-							[self didAuthorizeWithParameters:json];
-						}
-						else {
-							error = [[self class] errorForAccessTokenErrorResponse:json];
-						}
-					}
-					else {
-						NSString *err_msg = [NSString stringWithFormat:@"Expected a JSON encoded dictionary, but got: %@", json];
-						MC_ERR(&error, err_msg, 0);
-					}
-				}
-				else {
-					MC_ERR(&error, [NSHTTPURLResponse localizedStringForStatusCode:http.statusCode], http.statusCode)
-				}
-			}
-			else {
-				MC_ERR(&error, @"Unknown connection error", 0)
-			}
-		}
-		
-		if (callback) {
-			callback(NO, error);
-		}
-	}];
+	[self performAccessTokenRequestWithParams:params callback:callback];
 }
 
 - (void)didAuthorizeWithParameters:(NSDictionary *)params
@@ -143,7 +107,105 @@
 
 
 
+#pragma mark - Refresh Token
+
+- (void)refreshTokenWithCallback:(void (^)(BOOL didCancel, NSError *error))callback
+{
+	NSError *error = nil;
+	if (0 == [_refreshToken length]) {
+		MC_ERR(&error, @"I do not have a refresh token", 0);
+	}
+	else if (!self.clientId) {
+		MC_ERR(&error, @"I do not yet have a client id, cannot refresh token", 0);
+	}
+	else if (!_clientSecret) {
+		MC_ERR(&error, @"I do not yet have a client secret, cannot refresh token", 0);
+	}
+	else if (!_tokenURL) {
+		MC_ERR(&error, @"I'm missing `tokenURL`, please configure me correctly", 0);
+	}
+	
+	if (error) {
+		[self logIfVerbose:@"Trying to refresh token, but", error.localizedDescription, nil];
+		if (callback) {
+			callback(NO, error);
+		}
+		return;
+	}
+	
+	[self logIfVerbose:@"Refreshing token", nil];
+	
+	// construct request dictionary and execute it
+	NSDictionary *params = @{
+		@"client_id": self.clientId,
+		@"client_secret": self.clientSecret,
+		@"grant_type": @"refresh_token",
+		@"refresh_token": self.refreshToken,
+	};
+	
+	[self performAccessTokenRequestWithParams:params callback:callback];
+}
+
+
+
 #pragma mark - Utilities
+
+/**
+ *  Creates a POST request, form-urlencoding the given params into the request's body and sending it off using NSURLSession.
+ */
+- (void)performAccessTokenRequestWithParams:(NSDictionary *)params callback:(void (^)(BOOL didCancel, NSError *error))callback
+{
+	NSMutableURLRequest *post = [[NSMutableURLRequest alloc] initWithURL:self.tokenURL];
+	[post setHTTPMethod:@"POST"];
+	[post setValue:@"application/x-www-form-urlencoded; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
+	[post setHTTPBody:[[[self class] queryStringFor:params] dataUsingEncoding:NSUTF8StringEncoding]];
+	
+	NSURLSession *session = [NSURLSession sharedSession];
+	NSURLSessionTask *task = [session dataTaskWithRequest:post completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+		NSError *myError = error ?: [self parseAccessTokenResponse:response withData:data];
+		if (callback) {
+			callback(NO, myError);
+		}
+	}];
+	[task resume];
+}
+
+/**
+ *  Parse responses from code exchange and token refresh.
+ *
+ *  @returns An error if something breaks, nil otherwise
+ */
+- (NSError *)parseAccessTokenResponse:(NSURLResponse *)response withData:(NSData *)data
+{
+	NSError *error = nil;
+	NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
+	if ([http isKindOfClass:[NSHTTPURLResponse class]]) {
+		if (http.statusCode < 400) {
+			NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+			if ([json isKindOfClass:[NSDictionary class]]) {
+				
+				// got a token
+				if ([json[@"access_token"] length] > 0) {
+					[self didAuthorizeWithParameters:json];
+				}
+				else {
+					error = [[self class] errorForAccessTokenErrorResponse:json];
+				}
+			}
+			else {
+				NSString *err_msg = [NSString stringWithFormat:@"Expected a JSON encoded dictionary, but got: %@", json];
+				MC_ERR(&error, err_msg, 0);
+			}
+		}
+		else {
+			MC_ERR(&error, [NSHTTPURLResponse localizedStringForStatusCode:http.statusCode], http.statusCode)
+		}
+	}
+	else {
+		MC_ERR(&error, @"No HTTP-type response", 0)
+	}
+	return error;
+}
 
 - (BOOL)validateRedirectURL:(NSURL *)url error:(NSError **)error
 {

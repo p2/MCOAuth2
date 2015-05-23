@@ -2,7 +2,7 @@ MCOAuth2
 ========
 
 OAuth2 classes for a modern Objective-C environment.
-This is more of an academic exercise and very much WiP.
+This is more of an academic exercise and served as precursor for the [Swift OAuth2 framework](https://www.github.com/p2/OAuth2), you should not be using this one.
 Here is a very nice explanation of OAuth's basics: [The OAuth Bible](http://oauthbible.com/#oauth-2-three-legged).
 
 The code in this repo requires OS X 10.9+ or iOS 7+, with ARC enabled.

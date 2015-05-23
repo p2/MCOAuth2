@@ -48,6 +48,11 @@
  *  @param code The code to exchange for an access token
  *  @param callback A callback that will have `didCancel` = NO and `error` = nil on success
  */
-- (void)exchangeCodeForToken:(NSString *)code callback:(void (^)(BOOL, NSError *))callback;
+- (void)exchangeCodeForToken:(NSString *)code callback:(void (^)(BOOL didCancel, NSError *error))callback;
+
+/**
+ *  Attempts to get a new access token with a refresh token.
+ */
+- (void)refreshTokenWithCallback:(void (^)(BOOL didCancel, NSError *error))callback;
 
 @end
