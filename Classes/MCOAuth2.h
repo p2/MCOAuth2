@@ -66,6 +66,7 @@
  *    - token_uri (for code grant)
  *    - scope
  *    - verbose (applies to client logging, unrelated to the actual OAuth exchange)
+ *    - secret_in_body (sets code grant's clientKeySecretInBody setting IF there is a client_secret; avoid unless necessary)
  *  MITREid: https://github.com/mitreid-connect/
  */
 - (id)initWithSettings:(NSDictionary *)settings;

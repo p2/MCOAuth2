@@ -25,6 +25,9 @@
 /** A long-lived refresh token. */
 @property (copy, nonatomic) NSString *refreshToken;
 
+/** To force to put client key/secret into the body instead of a Basic auth header; set to YES if there is no client secret. */
+@property (nonatomic) BOOL clientKeySecretInBody;
+
 
 /**
  *  Call this when you receive the redirect from your web view controller or browser, simply passing in the redirect URL

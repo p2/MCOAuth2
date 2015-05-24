@@ -26,6 +26,7 @@
 		if ([settings[@"token_uri"] length] > 0) {
 			self.tokenURL = [NSURL URLWithString:settings[@"token_uri"]];
 		}
+		self.clientKeySecretInBody = [settings[@"secret_in_body"] boolValue] || !_clientSecret;
 	}
 	return self;
 }
@@ -87,11 +88,15 @@
 	// construct request dictionary and execute it
 	NSDictionary *params = @{
 		@"client_id": self.clientId,
-		@"client_secret": self.clientSecret,
 		@"redirect_uri": self.redirect,
 		@"grant_type": @"authorization_code",
 		@"code": self.code
 	};
+	if (_clientKeySecretInBody) {
+		NSMutableDictionary *mute = [params mutableCopy];
+		mute[@"client_secret"] = self.clientSecret;
+		params = mute;
+	}
 	
 	[self performAccessTokenRequestWithParams:params callback:callback];
 }
@@ -137,11 +142,15 @@
 	
 	// construct request dictionary and execute it
 	NSDictionary *params = @{
-		@"client_id": self.clientId,
-		@"client_secret": self.clientSecret,
 		@"grant_type": @"refresh_token",
 		@"refresh_token": self.refreshToken,
 	};
+	if (_clientKeySecretInBody) {
+		NSMutableDictionary *mute = [params mutableCopy];
+		mute[@"client_id"] = self.clientId;
+		mute[@"client_secret"] = self.clientSecret;
+		params = mute;
+	}
 	
 	[self performAccessTokenRequestWithParams:params callback:callback];
 }
@@ -159,6 +168,18 @@
 	[post setHTTPMethod:@"POST"];
 	[post setValue:@"application/x-www-form-urlencoded; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
 	[post setHTTPBody:[[[self class] queryStringFor:params] dataUsingEncoding:NSUTF8StringEncoding]];
+	
+	if (!_clientKeySecretInBody) {
+		NSData *userpass = [[NSString stringWithFormat:@"%@:%@", self.clientId, self.clientSecret ?: @""] dataUsingEncoding:NSUTF8StringEncoding];
+		NSString *basic = [NSString stringWithFormat:@"Basic %@", [userpass base64EncodedStringWithOptions:0]];
+		[post setValue:basic forHTTPHeaderField:@"Authorization"];
+	}
+	
+#if 0
+	NSLog(@"[MCOAuth2] REQUEST %@:  %@", post.HTTPMethod, post.URL);
+	NSLog(@"[MCOAuth2] REQUEST HEAD:  %@", [post allHTTPHeaderFields]);
+	NSLog(@"[MCOAuth2] REQUEST BODY:  %@", [[NSString alloc] initWithData:post.HTTPBody encoding:NSUTF8StringEncoding]);
+#endif
 	
 	NSURLSession *session = [NSURLSession sharedSession];
 	NSURLSessionTask *task = [session dataTaskWithRequest:post completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
