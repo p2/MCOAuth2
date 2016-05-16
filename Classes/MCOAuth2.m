@@ -133,6 +133,7 @@
 		[get setValue:accept forHTTPHeaderField:@"Accept"];
 	}
 	[get setValue:[NSString stringWithFormat:@"Bearer %@", self.accessToken] forHTTPHeaderField:@"Authorization"];
+	[self logIfVerbose:@"> HEADERS SENT: %@", get.allHTTPHeaderFields];
 	
 	// send the GET request
 	[self logIfVerbose:@"Requesting resource from", [get.URL description], nil];
@@ -140,6 +141,8 @@
 		NSError *error = connectionError;
 		if (!error) {
 			NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
+			[self logIfVerbose:@"< HEADERS RECV: %@", http.allHeaderFields];
+			
 			if ([http isKindOfClass:[NSHTTPURLResponse class]]) {
 				if (200 == http.statusCode) {
 					
